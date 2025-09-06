@@ -12,14 +12,13 @@ if (!globalThis.crypto) {
 const PORT = Number(process.env.PORT || 3000);
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN!;
 const ICS_TOKEN = process.env.ICS_TOKEN || "";
-const OUTLOOK_TZ = process.env.OUTLOOK_TZ || "Pacific Standard Time";
 
 if (!ACCESS_TOKEN) {
   console.error("❌ Missing ACCESS_TOKEN in .env");
   process.exit(1);
 }
 
-// ---------- Graph 拉取 To Do ----------
+// ---------- Graph API - Fetch To Do Tasks ----------
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
 type TodoTask = {
@@ -48,7 +47,8 @@ async function fetchDueTasks(): Promise<TodoTask[]> {
   };
   const lists: { id: string; displayName: string }[] = listsJson.value ?? [];
 
-  const all: TodoTask[] = [];
+  // Fetch tasks from all lists with rate limiting
+  const allTaskArrays: TodoTask[][] = [];
   for (const list of lists) {
     const url = `${GRAPH}/me/todo/lists/${encodeURIComponent(list.id)}/tasks`;
     const r = await fetch(url, { headers });
@@ -57,7 +57,15 @@ async function fetchDueTasks(): Promise<TodoTask[]> {
       throw new Error(`List tasks error ${r.status}: ${text}`);
     }
     const j = (await r.json()) as { value?: TodoTask[] };
-    const tasks: TodoTask[] = j.value ?? [];
+    allTaskArrays.push(j.value ?? []);
+
+    // Small delay between requests to avoid rate limiting
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  // Flatten and filter tasks
+  const all: TodoTask[] = [];
+  for (const tasks of allTaskArrays) {
     for (const t of tasks) {
       const due = t.dueDateTime?.dateTime;
       const done = (t.status || "").toLowerCase() === "completed";
@@ -67,11 +75,11 @@ async function fetchDueTasks(): Promise<TodoTask[]> {
   return all;
 }
 
-// ---------- 生成 ICS ----------
+// ---------- Generate ICS Calendar ----------
 function buildCalendar(tasks: TodoTask[]) {
   const cal = ical({
-    name: "To Do – Due Dates",
-    prodId: { company: "your-name", product: "todo-due-ics", language: "EN" },
+    name: "todo-due-calendar",
+    prodId: { company: "bunnyxt", product: "todo-due-ics", language: "zh-CN" },
     scale: "GREGORIAN",
     ttl: 60 * 30,
   });
@@ -101,7 +109,7 @@ function buildCalendar(tasks: TodoTask[]) {
   return cal;
 }
 
-// ---------- HTTP 服务 ----------
+// ---------- HTTP Server ----------
 const app = express();
 
 app.get("/todo-due.ics", async (req, res) => {
