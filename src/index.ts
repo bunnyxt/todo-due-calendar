@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import ical from "ical-generator";
+import ical, { ICalEventBusyStatus } from "ical-generator";
 import fetch from "node-fetch";
 import { webcrypto } from "crypto";
 
@@ -180,6 +180,7 @@ function buildCalendar(tasks: TodoTask[]) {
       description:
         (t.categories?.length ? `#${t.categories.join(" #")}\n` : "") +
         "Source: Microsoft To Do",
+      busystatus: ICalEventBusyStatus.FREE,
       lastModified: t.lastModifiedDateTime
         ? new Date(t.lastModifiedDateTime)
         : undefined,
