@@ -126,31 +126,79 @@ async function fetchDueTasks(): Promise<TodoTask[]> {
   };
   const lists: { id: string; displayName: string }[] = listsJson.value ?? [];
 
-  // Fetch tasks from all lists with rate limiting
+  // Fetch tasks from all lists with pagination (client-side filtering required)
   const allTaskArrays: TodoTask[][] = [];
   for (const list of lists) {
-    const url = `${GRAPH}/me/todo/lists/${encodeURIComponent(list.id)}/tasks`;
-    const r = await fetch(url, { headers });
-    if (!r.ok) {
-      const text = await r.text();
-      throw new Error(`List tasks error ${r.status}: ${text}`);
-    }
-    const j = (await r.json()) as { value?: TodoTask[] };
-    allTaskArrays.push(j.value ?? []);
+    console.log(`Fetching tasks from list ${list.displayName}...`);
 
-    // Small delay between requests to avoid rate limiting
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Fetch all tasks (server-side filtering not supported for complex objects)
+    const baseUrl = `${GRAPH}/me/todo/lists/${encodeURIComponent(
+      list.id
+    )}/tasks`;
+    const filterParams = new URLSearchParams({
+      $top: "50",
+    });
+
+    let allTasks: TodoTask[] = [];
+    let skip = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const url = `${baseUrl}?${filterParams.toString()}&$skip=${skip}`;
+      const r = await fetch(url, { headers });
+      if (!r.ok) {
+        const text = await r.text();
+        throw new Error(`List tasks error ${r.status}: ${text}`);
+      }
+
+      const response = (await r.json()) as {
+        value?: TodoTask[];
+        "@odata.nextLink"?: string;
+      };
+
+      const tasks = response.value ?? [];
+      allTasks.push(...tasks);
+
+      console.log(
+        `Fetched ${tasks.length} tasks from list ${list.displayName} (page ${
+          Math.floor(skip / 50) + 1
+        })`
+      );
+
+      // Check if there are more pages
+      hasMore = tasks.length === 50 && !!response["@odata.nextLink"];
+      skip += 50;
+
+      // Small delay between requests to avoid rate limiting
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    allTaskArrays.push(allTasks);
+    console.log(`Total tasks from ${list.displayName}: ${allTasks.length}`);
   }
 
-  // Flatten and filter tasks
+  // Flatten and filter tasks (client-side filtering required)
   const all: TodoTask[] = [];
   for (const tasks of allTaskArrays) {
-    for (const t of tasks) {
-      const due = t.dueDateTime?.dateTime;
-      const done = (t.status || "").toLowerCase() === "completed";
-      if (due && !done) all.push(t);
+    for (const task of tasks) {
+      const due = task.dueDateTime?.dateTime;
+      const done = (task.status || "").toLowerCase() === "completed";
+      if (due && !done) {
+        all.push(task);
+      }
     }
   }
+
+  // Sort by due date (earliest first)
+  all.sort((a, b) => {
+    const dateA = a.dueDateTime?.dateTime;
+    const dateB = b.dueDateTime?.dateTime;
+    if (!dateA) return 1;
+    if (!dateB) return -1;
+    return new Date(dateA).getTime() - new Date(dateB).getTime();
+  });
+
+  console.log(`Total unfinished tasks with due dates: ${all.length}`);
   return all;
 }
 
