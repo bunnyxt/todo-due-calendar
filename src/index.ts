@@ -125,17 +125,19 @@ async function fetchDueTasks(): Promise<TodoTask[]> {
     value?: { id: string; displayName: string }[];
   };
   const lists: { id: string; displayName: string }[] = listsJson.value ?? [];
+  console.log(`Found ${lists.length} lists`);
 
-  // Fetch tasks from all lists with pagination (client-side filtering required)
+  // Fetch incomplete tasks from all lists with pagination
   const allTaskArrays: TodoTask[][] = [];
   for (const list of lists) {
-    console.log(`Fetching tasks from list ${list.displayName}...`);
+    console.log(`Fetching incomplete tasks from list ${list.displayName}...`);
 
-    // Fetch all tasks (server-side filtering not supported for complex objects)
+    // Fetch incomplete tasks only (server-side filtering for status)
     const baseUrl = `${GRAPH}/me/todo/lists/${encodeURIComponent(
       list.id
     )}/tasks`;
     const filterParams = new URLSearchParams({
+      $filter: "status ne 'completed'",
       $top: "50",
     });
 
@@ -144,7 +146,9 @@ async function fetchDueTasks(): Promise<TodoTask[]> {
     let hasMore = true;
 
     while (hasMore) {
-      const url = `${baseUrl}?${filterParams.toString()}&$skip=${skip}`;
+      const params = new URLSearchParams(filterParams);
+      params.set("$skip", skip.toString());
+      const url = `${baseUrl}?${params.toString()}`;
       const r = await fetch(url, { headers });
       if (!r.ok) {
         const text = await r.text();
@@ -160,9 +164,9 @@ async function fetchDueTasks(): Promise<TodoTask[]> {
       allTasks.push(...tasks);
 
       console.log(
-        `Fetched ${tasks.length} tasks from list ${list.displayName} (page ${
-          Math.floor(skip / 50) + 1
-        })`
+        `Fetched ${tasks.length} incomplete tasks from list ${
+          list.displayName
+        } (page ${Math.floor(skip / 50) + 1})`
       );
 
       // Check if there are more pages
@@ -174,16 +178,17 @@ async function fetchDueTasks(): Promise<TodoTask[]> {
     }
 
     allTaskArrays.push(allTasks);
-    console.log(`Total tasks from ${list.displayName}: ${allTasks.length}`);
+    console.log(
+      `Total incomplete tasks from ${list.displayName}: ${allTasks.length}`
+    );
   }
 
-  // Flatten and filter tasks (client-side filtering required)
+  // Flatten and filter tasks (only need to filter for due dates now)
   const all: TodoTask[] = [];
   for (const tasks of allTaskArrays) {
     for (const task of tasks) {
       const due = task.dueDateTime?.dateTime;
-      const done = (task.status || "").toLowerCase() === "completed";
-      if (due && !done) {
+      if (due) {
         all.push(task);
       }
     }
@@ -198,7 +203,7 @@ async function fetchDueTasks(): Promise<TodoTask[]> {
     return new Date(dateA).getTime() - new Date(dateB).getTime();
   });
 
-  console.log(`Total unfinished tasks with due dates: ${all.length}`);
+  console.log(`Total incomplete tasks with due dates: ${all.length}`);
   return all;
 }
 
