@@ -9,7 +9,7 @@ Turning unfinished Microsoft ToDo tasks with due date into ICS calendar feed.
 3. Create `.env` from `.env.example` file, fill in `CLIENT_ID` we got from step 1. Also, set `ICS_TOKEN` to a random string. Keep it secret.
 4. Run `pnpm run get-tokens` and follow the instructions: open link, paste code, login with your account, allow access. Once finished successfully, you will see `ACCESS_TOKEN` and `REFRESH_TOKEN` printed in the console. Update both in `.env` file.
 5. Run `pnpm run dev` to start web app. Your feed will start on `http://localhost:3000/todo-due.ics?token=your-token`.
-6. For debugging and testing, check
+6. For debugging and testing, manually import the generated ics file into outlook desktop application.
 
 # Deployment
 
