@@ -203,7 +203,7 @@ app.get("/todo-due.ics", async (req, res) => {
     const cal = buildCalendar(tasks);
 
     res.setHeader("Content-Type", "text/calendar; charset=utf-8");
-    res.setHeader("Cache-Control", "public, max-age=120");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.send(cal.toString());
   } catch (e: any) {
     console.error("❌ /todo-due.ics error:", e?.message || e);
