@@ -1,7 +1,7 @@
 {
   "name": "todo-due-calendar",
   "version": "1.0.0",
-  "description": "",
+  "description": "A Microsoft To Do calendar feed that generates ICS files for tasks with due dates",
   "main": "index.js",
   "engines": {
     "node": ">=20.0.0",
@@ -10,9 +10,18 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node --enable-source-maps dist/index.js"
+    "start": "node --enable-source-maps dist/index.js",
+    "get-tokens": "tsx src/get-tokens.ts"
   },
-  "keywords": [],
+  "keywords": [
+    "microsoft-todo",
+    "calendar",
+    "ics",
+    "ical",
+    "microsoft-graph",
+    "todo",
+    "tasks"
+  ],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@9.12.0+sha512.4abf725084d7bcbafbd728bfc7bee61f2f791f977fd87542b3579dcb23504d170d46337945e4c66485cd12d588a0c0e570ed9c477e7ccdd8507cf05f3f92eaca",
