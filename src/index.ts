@@ -10,12 +10,89 @@ if (!globalThis.crypto) {
 }
 
 const PORT = Number(process.env.PORT || 3000);
-const ACCESS_TOKEN = process.env.ACCESS_TOKEN!;
+const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
+const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
 const ICS_TOKEN = process.env.ICS_TOKEN || "";
 
-if (!ACCESS_TOKEN) {
-  console.error("❌ Missing ACCESS_TOKEN in .env");
+// Check if we have the required tokens
+if (!ACCESS_TOKEN && !REFRESH_TOKEN) {
+  console.error(
+    "❌ Missing tokens! Please set either ACCESS_TOKEN or REFRESH_TOKEN in .env"
+  );
+  console.log("\nTo get tokens, run: pnpm run get-tokens");
   process.exit(1);
+}
+
+if (REFRESH_TOKEN && !CLIENT_ID) {
+  console.error("❌ REFRESH_TOKEN provided but missing CLIENT_ID");
+  console.log("Please set CLIENT_ID in your .env file");
+  process.exit(1);
+}
+
+// ---------- Token Management ----------
+let currentAccessToken: string | null = ACCESS_TOKEN || null;
+let tokenExpiryTime: number = 0;
+
+async function getValidAccessToken(): Promise<string> {
+  // If we only have a static access token, use it
+  if (!REFRESH_TOKEN) {
+    if (!ACCESS_TOKEN) {
+      throw new Error("No access token available");
+    }
+    return ACCESS_TOKEN;
+  }
+
+  const now = Date.now();
+
+  // If we have a valid token that hasn't expired yet, return it
+  if (currentAccessToken && now < tokenExpiryTime) {
+    return currentAccessToken;
+  }
+
+  // Otherwise, refresh the token
+  console.log("🔄 Refreshing access token...");
+
+  const tokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
+  const tokenData = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: REFRESH_TOKEN,
+    client_id: CLIENT_ID!,
+    scope: "https://graph.microsoft.com/.default",
+  });
+
+  const response = await fetch(tokenUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: tokenData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Token refresh failed ${response.status}: ${errorText}`);
+  }
+
+  const tokenResponse = (await response.json()) as {
+    access_token: string;
+    expires_in: number;
+    refresh_token?: string;
+  };
+
+  // Update the stored tokens
+  currentAccessToken = tokenResponse.access_token;
+  tokenExpiryTime = now + tokenResponse.expires_in * 1000 - 60000; // Refresh 1 minute before expiry
+
+  // Update refresh token if a new one was provided
+  if (tokenResponse.refresh_token) {
+    console.log(
+      "⚠️  New refresh token received. Please update your REFRESH_TOKEN environment variable."
+    );
+  }
+
+  console.log("✅ Access token refreshed successfully");
+  return currentAccessToken;
 }
 
 // ---------- Graph API - Fetch To Do Tasks ----------
@@ -31,8 +108,10 @@ type TodoTask = {
 };
 
 async function fetchDueTasks(): Promise<TodoTask[]> {
+  const accessToken = await getValidAccessToken();
+
   const headers = {
-    Authorization: `Bearer ${ACCESS_TOKEN}`,
+    Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
   };
 
